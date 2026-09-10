@@ -2545,9 +2545,13 @@ function renderGeneral() {
 }
 
 function renderMonths() {
-  $("#monthNav").innerHTML = DATA.months.map((m,i)=>`<button class="month-btn ${i===0?'active':''}" data-month="${m}"><span>${m}</span><small>2026</small></button>`).join("");
+  const monthNames = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  const nowMonthName = monthNames[new Date().getMonth()];
+  let defaultMonthIdx = DATA.months.indexOf(nowMonthName);
+  if (defaultMonthIdx === -1) defaultMonthIdx = 0;
+  $("#monthNav").innerHTML = DATA.months.map((m,i)=>`<button class="month-btn ${i===defaultMonthIdx?'active':''}" data-month="${m}"><span>${m}</span><small>2026</small></button>`).join("");
   $("#monthViews").innerHTML = DATA.months.map((month,i)=>`
-    <div class="month-view ${i===0?'active':''}" data-month="${month}">
+    <div class="month-view ${i===defaultMonthIdx?'active':''}" data-month="${month}">
       <div class="month-title">
         <div><span>${month} 2026</span><h2>Cronograma mensual</h2></div>
         <div class="face-stack">${[...new Set(DATA.monthly[month].flatMap(r=>r.cells.flatMap(c=>c.people||[])))].map(p=>avatar(p)).join("")}</div>
