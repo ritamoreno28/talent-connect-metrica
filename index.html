@@ -425,7 +425,7 @@ button.month-btn.active{background:var(--coral);border-color:var(--coral);color:
 .person-row small{display:block;color:var(--muted);font-size:11px;font-weight:800;margin-top:1px}
 .compact .person-row{padding:7px}
 .compact .day-card{min-height:132px}
-.compact .person-row .avatar{width:36px;height:36px}
+.compact .person-row .avatar{width:38px;height:38px}
 .compact .person-row small{display:none}
 .count-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
 @media(max-width:900px){.count-grid{grid-template-columns:1fr}}
@@ -2670,9 +2670,12 @@ $("#downloadMenu").addEventListener("change", (e) => {
 /* ===== Exportar a Excel ===== */
 const MONTHS_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
+// "Estado" es el modo de trabajo real (Presencial / Remoto). "Encuentro de Talento Humano"
+// ya no es un estado aparte —ese día también es Presencial—, así que solo se usa como color
+// especial de fila (ver _reunion en buildCalendarSheet) y el texto va en "Detalle".
 const ESTADO_COLORS = {
   "Presencial":                    "FFEAF9F7",
-  "No corresponde":                "FFF7F7F7",
+  "Remoto":                        "FFF7F7F7",
   "Encuentro de Talento Humano":   "FFFFF1F0",
   "Feriado":                       "FFFFF9E6",
   "Sin asignar":                   "FFF0F0F0"
@@ -2713,14 +2716,15 @@ function buildMonthCalendar(monthName, selected) {
       const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
       if (d.getMonth() !== targetMonthIdx) return; // ese día real pertenece a otro mes, ya sale en su propia hoja
 
-      let estado, detalle;
+      let estado, detalle, reunion = false;
       if (cell.type === "empty") {
         estado = "Sin asignar"; detalle = "—";
       } else if (cell.type === "holiday") {
         estado = "Feriado"; detalle = cell.label || "Feriado";
       } else if (cell.type === "complete") {
-        // Misma frase que usa la propia tarjeta del día en la web, para no generar confusión con dos nombres distintos.
-        estado = "Encuentro de Talento Humano"; detalle = "Todo el equipo";
+        // El día del encuentro de equipo también es Presencial: no es un estado aparte.
+        // El texto del encuentro va en Detalle; se marca "reunion" solo para pintar la fila distinto.
+        estado = "Presencial"; detalle = "Encuentro de Talento Humano"; reunion = true;
       } else { // "people"
         const incluye = (cell.people || []).includes(selected);
         if (selected === "Todos") {
@@ -2728,10 +2732,10 @@ function buildMonthCalendar(monthName, selected) {
         } else if (incluye) {
           estado = "Presencial"; detalle = selected;
         } else {
-          estado = "No corresponde"; detalle = "—";
+          estado = "Remoto"; detalle = "—";
         }
       }
-      rows.push({ Mes: monthName, Fecha: formatFecha(d), Dia: DATA.days[i] || "", Estado: estado, Detalle: detalle });
+      rows.push({ Mes: monthName, Fecha: formatFecha(d), Dia: DATA.days[i] || "", Estado: estado, Detalle: detalle, _reunion: reunion });
     });
   });
   return rows;
@@ -2749,13 +2753,19 @@ const BRAND_SUBTITLE = "Cobertura: Lunes a viernes   ·   Encuentro de TH: Jueve
 function addBrandHeader(wb, ws, title, span) {
   const titleRow = ws.getRow(1);
   titleRow.height = 40;
-  for (let c = 1; c <= span; c++) {
-    ws.getCell(1, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1A1A1A" } };
-  }
   // Se reservan las 2 primeras columnas para el logo (así tiene espacio real y no queda aplastado
   // contra el título); si la hoja es muy angosta se reserva solo 1.
   const logoCols = span >= 3 ? 2 : 1;
   const titleStartCol = logoCols + 1;
+
+  // El logo de Métrica está pensado para fondo claro (igual que en la web); puesto directo sobre
+  // la barra oscura casi no se distingue. Se le da su propio "chip" blanco detrás para que resalte.
+  for (let c = 1; c <= logoCols; c++) {
+    ws.getCell(1, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFFFF" } };
+  }
+  for (let c = titleStartCol; c <= span; c++) {
+    ws.getCell(1, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1A1A1A" } };
+  }
   ws.mergeCells(1, titleStartCol, 1, span);
   const titleCell = ws.getCell(1, titleStartCol);
   titleCell.value = title;
@@ -2767,9 +2777,9 @@ function addBrandHeader(wb, ws, title, span) {
     if (logoImg && logoImg.src.indexOf("data:image/png") === 0) {
       const base64 = logoImg.src.split(",")[1];
       const imageId = wb.addImage({ base64, extension: "png" });
-      const logoWidth = logoCols === 2 ? 150 : 85;
+      const logoWidth = logoCols === 2 ? 175 : 95;
       const logoHeight = logoWidth / 6.8836; // relación de aspecto real del logo (12949x1881px)
-      ws.addImage(imageId, { tl: { col: 0.18, row: 0.2 }, ext: { width: logoWidth, height: logoHeight } });
+      ws.addImage(imageId, { tl: { col: 0.15, row: 0.22 }, ext: { width: logoWidth, height: logoHeight } });
     }
   } catch (e) { /* el logo es un detalle opcional, nunca debe bloquear la descarga */ }
 
@@ -2796,8 +2806,8 @@ function styleHeaderRow(row) {
 
 function buildCalendarSheet(wb, name, title, rows) {
   const columns = [
-    { header: "Mes", key: "Mes", width: 14 },
-    { header: "Fecha", key: "Fecha", width: 12 },
+    { header: "Mes", key: "Mes", width: 16 },
+    { header: "Fecha", key: "Fecha", width: 13 },
     { header: "Día", key: "Dia", width: 12 },
     { header: "Estado", key: "Estado", width: 20 },
     { header: "Detalle", key: "Detalle", width: 34 }
@@ -2812,7 +2822,7 @@ function buildCalendarSheet(wb, name, title, rows) {
   rows.forEach(r => {
     const row = ws.getRow(ws.lastRow.number + 1);
     columns.forEach((c, i) => row.getCell(i + 1).value = r[c.key]);
-    const fillColor = ESTADO_COLORS[r.Estado] || "FFFFFFFF";
+    const fillColor = r._reunion ? ESTADO_COLORS["Encuentro de Talento Humano"] : (ESTADO_COLORS[r.Estado] || "FFFFFFFF");
     row.eachCell({ includeEmpty: true }, cell => {
       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fillColor } };
       cell.border = { bottom: { style: "thin", color: { argb: "FFEDEDED" } } };
