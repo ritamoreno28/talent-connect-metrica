@@ -425,7 +425,7 @@ button.month-btn.active{background:var(--coral);border-color:var(--coral);color:
 .person-row small{display:block;color:var(--muted);font-size:11px;font-weight:800;margin-top:1px}
 .compact .person-row{padding:7px}
 .compact .day-card{min-height:132px}
-.compact .person-row .avatar{width:30px;height:30px}
+.compact .person-row .avatar{width:36px;height:36px}
 .compact .person-row small{display:none}
 .count-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
 @media(max-width:900px){.count-grid{grid-template-columns:1fr}}
@@ -2579,7 +2579,22 @@ function renderMonths() {
     const month = btn.dataset.month;
     $$(".month-view").forEach(v=>v.classList.toggle("active", v.dataset.month === month));
     applyPersonFilter();
+    updateDownloadLabels();
   }));
+}
+
+// Deja explícito qué descarga cada opción del menú (mes puntual vs. todo el rango),
+// para que no se vean como "lo mismo dos veces".
+function updateDownloadLabels() {
+  const menu = $("#downloadMenu");
+  if (!menu) return;
+  const monthName = getActiveMonthName();
+  const first = DATA.months[0];
+  const last = DATA.months[DATA.months.length - 1];
+  const optMes = menu.querySelector('option[value="excel-mes"]');
+  const optTodo = menu.querySelector('option[value="excel-todo"]');
+  if (optMes) optMes.textContent = `Solo ${monthName} (mes actual)`;
+  if (optTodo) optTodo.textContent = `Todo el cronograma (${first} a ${last})`;
 }
 
 function renderCounts() {
@@ -2636,6 +2651,7 @@ renderMonths();
 renderCounts();
 renderCriteria();
 initTabs();
+updateDownloadLabels();
 
 
 $("#personFilter").addEventListener("change", applyPersonFilter);
@@ -2655,11 +2671,11 @@ $("#downloadMenu").addEventListener("change", (e) => {
 const MONTHS_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
 const ESTADO_COLORS = {
-  "Presencial":          "FFEAF9F7",
-  "No corresponde":      "FFF7F7F7",
-  "Encuentro de equipo": "FFFFF1F0",
-  "Feriado":             "FFFFF9E6",
-  "Sin asignar":         "FFF0F0F0"
+  "Presencial":                    "FFEAF9F7",
+  "No corresponde":                "FFF7F7F7",
+  "Encuentro de Talento Humano":   "FFFFF1F0",
+  "Feriado":                       "FFFFF9E6",
+  "Sin asignar":                   "FFF0F0F0"
 };
 
 // El texto de "semana" (ej. "1 al 4 septiembre") solo indica los días de ESE mes;
@@ -2703,7 +2719,8 @@ function buildMonthCalendar(monthName, selected) {
       } else if (cell.type === "holiday") {
         estado = "Feriado"; detalle = cell.label || "Feriado";
       } else if (cell.type === "complete") {
-        estado = "Encuentro de equipo"; detalle = cell.label || "Encuentro de Talento Humano";
+        // Misma frase que usa la propia tarjeta del día en la web, para no generar confusión con dos nombres distintos.
+        estado = "Encuentro de Talento Humano"; detalle = "Todo el equipo";
       } else { // "people"
         const incluye = (cell.people || []).includes(selected);
         if (selected === "Todos") {
@@ -2731,12 +2748,16 @@ const BRAND_SUBTITLE = "Cobertura: Lunes a viernes   ·   Encuentro de TH: Jueve
 // Devuelve la fila en la que debe ir el encabezado de columnas.
 function addBrandHeader(wb, ws, title, span) {
   const titleRow = ws.getRow(1);
-  titleRow.height = 34;
+  titleRow.height = 40;
   for (let c = 1; c <= span; c++) {
     ws.getCell(1, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1A1A1A" } };
   }
-  ws.mergeCells(1, 2, 1, span);
-  const titleCell = ws.getCell(1, 2);
+  // Se reservan las 2 primeras columnas para el logo (así tiene espacio real y no queda aplastado
+  // contra el título); si la hoja es muy angosta se reserva solo 1.
+  const logoCols = span >= 3 ? 2 : 1;
+  const titleStartCol = logoCols + 1;
+  ws.mergeCells(1, titleStartCol, 1, span);
+  const titleCell = ws.getCell(1, titleStartCol);
   titleCell.value = title;
   titleCell.font = { name: "Calibri", size: 13, bold: true, color: { argb: "FFFFFFFF" } };
   titleCell.alignment = { vertical: "middle", horizontal: "left" };
@@ -2746,7 +2767,9 @@ function addBrandHeader(wb, ws, title, span) {
     if (logoImg && logoImg.src.indexOf("data:image/png") === 0) {
       const base64 = logoImg.src.split(",")[1];
       const imageId = wb.addImage({ base64, extension: "png" });
-      ws.addImage(imageId, { tl: { col: 0.15, row: 0.15 }, ext: { width: 100, height: 14.5 } });
+      const logoWidth = logoCols === 2 ? 150 : 85;
+      const logoHeight = logoWidth / 6.8836; // relación de aspecto real del logo (12949x1881px)
+      ws.addImage(imageId, { tl: { col: 0.18, row: 0.2 }, ext: { width: logoWidth, height: logoHeight } });
     }
   } catch (e) { /* el logo es un detalle opcional, nunca debe bloquear la descarga */ }
 
