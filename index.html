@@ -2647,23 +2647,59 @@ $("#downloadMenu").addEventListener("change", (e) => {
 });
 
 /* ===== Exportar a Excel ===== */
+const MONTHS_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
 function rowIncludesPerson(cell, selected) {
   if (selected === "Todos") return true;
-  if (cell.type === "complete" || cell.type === "holiday") return true;
-  return (cell.people || []).includes(selected);
+  return (cell.people || []).includes(selected); // cada celda (incl. "Encuentro" y feriados) ya lista a quién aplica
+}
+
+// El texto de "semana" (ej. "1 al 4 septiembre") solo indica los días de ESE mes;
+// en semanas que cruzan fin de mes, el lunes real de la semana puede caer en el mes anterior.
+// Se reconstruye el lunes real usando la primera celda no vacía como ancla.
+function computeMonday(week) {
+  const firstIdx = week.cells.findIndex(c => c.type !== "empty");
+  const anchorIdx = firstIdx === -1 ? 0 : firstIdx;
+  const m = week.week.match(/(\d+)(?:\s+al\s+\d+)?\s+([A-Za-zÀ-ÿ]+)/i);
+  if (!m) return null;
+  const day = parseInt(m[1], 10);
+  const monIdx = MONTHS_ES.findIndex(x => x.toLowerCase() === m[2].toLowerCase());
+  if (monIdx === -1) return null;
+  const d = new Date(2026, monIdx, day);
+  d.setDate(d.getDate() - anchorIdx);
+  return d;
+}
+
+function formatFecha(d) {
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/2026`;
 }
 
 function buildMonthRows(monthName, selected) {
   const weeks = DATA.monthly[monthName] || [];
+  const targetMonthIdx = MONTHS_ES.indexOf(monthName);
   const rows = [];
   weeks.forEach(w => {
+    const monday = computeMonday(w);
+    if (!monday) return;
     w.cells.forEach((cell, i) => {
+      const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
+      if (d.getMonth() !== targetMonthIdx) return; // ese día real pertenece a otro mes, ya sale en su propia hoja
       if (!rowIncludesPerson(cell, selected)) return;
+      let detalle;
+      if (selected !== "Todos" && cell.type === "people") {
+        detalle = selected; // solo la persona filtrada, sin mezclar otros nombres
+      } else if (cell.type === "empty") {
+        detalle = "(sin actividad)";
+      } else {
+        detalle = cell.label || "(sin actividad)";
+      }
       rows.push({
         "Mes": monthName,
-        "Semana": w.week,
+        "Fecha": formatFecha(d),
         "Día": DATA.days[i] || "",
-        "Asignado(s)": cell.label || "(sin actividad)",
+        "Asignado(s)": detalle,
         "Tipo": cell.type === "complete" ? "Encuentro de equipo" : cell.type === "holiday" ? "Feriado" : cell.type === "empty" ? "Sin asignar" : "Presencia en oficina"
       });
     });
