@@ -2198,7 +2198,7 @@ body{
 }
 
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 </head>
 <body>
 <div class="app">
@@ -2257,12 +2257,11 @@ body{
         <option value="Alonso">Alonso</option>
         <option value="Fiorella">Fiorella</option>
       </select>
-      <button id="toggleDensity">Vista compacta</button>
+      <button id="toggleDensity" hidden>Vista compacta</button>
       <select id="downloadMenu" class="select">
-        <option value="" selected disabled>Descargar ▾</option>
-        <option value="print">Imprimir / PDF</option>
-        <option value="excel-mes">Excel · mes actual</option>
-        <option value="excel-todo">Excel · cronograma completo</option>
+        <option value="" selected disabled>Descargar Excel ▾</option>
+        <option value="excel-mes">Mes actual</option>
+        <option value="excel-todo">Cronograma completo</option>
       </select>
     </div>
   </div>
@@ -2620,6 +2619,8 @@ function initTabs() {
     btn.classList.add("active");
     $$(".view").forEach(v=>v.classList.remove("active"));
     $(`#view-${btn.dataset.view}`).classList.add("active");
+    // "Vista compacta" solo afecta el diseño de Detalle mensual, así que solo se muestra ahí
+    $("#toggleDensity").hidden = btn.dataset.view !== "months";
   }));
 }
 
@@ -2640,8 +2641,7 @@ $("#toggleDensity").addEventListener("click", () => {
 
 $("#downloadMenu").addEventListener("change", (e) => {
   const action = e.target.value;
-  if (action === "print") window.print();
-  else if (action === "excel-mes") exportExcelMesActual();
+  if (action === "excel-mes") exportExcelMesActual();
   else if (action === "excel-todo") exportExcelTodo();
   e.target.value = "";
 });
@@ -2649,10 +2649,13 @@ $("#downloadMenu").addEventListener("change", (e) => {
 /* ===== Exportar a Excel ===== */
 const MONTHS_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
-function rowIncludesPerson(cell, selected) {
-  if (selected === "Todos") return true;
-  return (cell.people || []).includes(selected); // cada celda (incl. "Encuentro" y feriados) ya lista a quién aplica
-}
+const ESTADO_COLORS = {
+  "Presencial":          "FFEAF9F7",
+  "No corresponde":      "FFF7F7F7",
+  "Encuentro de equipo": "FFFFF1F0",
+  "Feriado":             "FFFFF9E6",
+  "Sin asignar":         "FFF0F0F0"
+};
 
 // El texto de "semana" (ej. "1 al 4 septiembre") solo indica los días de ESE mes;
 // en semanas que cruzan fin de mes, el lunes real de la semana puede caer en el mes anterior.
@@ -2676,7 +2679,9 @@ function formatFecha(d) {
   return `${dd}/${mm}/2026`;
 }
 
-function buildMonthRows(monthName, selected) {
+// Calendario completo del mes (todos los días hábiles, no solo los "aciertos"),
+// con un Estado claro por día para la persona filtrada (o el detalle completo si es "Todos").
+function buildMonthCalendar(monthName, selected) {
   const weeks = DATA.monthly[monthName] || [];
   const targetMonthIdx = MONTHS_ES.indexOf(monthName);
   const rows = [];
@@ -2686,22 +2691,25 @@ function buildMonthRows(monthName, selected) {
     w.cells.forEach((cell, i) => {
       const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
       if (d.getMonth() !== targetMonthIdx) return; // ese día real pertenece a otro mes, ya sale en su propia hoja
-      if (!rowIncludesPerson(cell, selected)) return;
-      let detalle;
-      if (selected !== "Todos" && cell.type === "people") {
-        detalle = selected; // solo la persona filtrada, sin mezclar otros nombres
-      } else if (cell.type === "empty") {
-        detalle = "(sin actividad)";
-      } else {
-        detalle = cell.label || "(sin actividad)";
+
+      let estado, detalle;
+      if (cell.type === "empty") {
+        estado = "Sin asignar"; detalle = "—";
+      } else if (cell.type === "holiday") {
+        estado = "Feriado"; detalle = cell.label || "Feriado";
+      } else if (cell.type === "complete") {
+        estado = "Encuentro de equipo"; detalle = cell.label || "Encuentro de Talento Humano";
+      } else { // "people"
+        const incluye = (cell.people || []).includes(selected);
+        if (selected === "Todos") {
+          estado = "Presencial"; detalle = cell.label || "";
+        } else if (incluye) {
+          estado = "Presencial"; detalle = selected;
+        } else {
+          estado = "No corresponde"; detalle = "—";
+        }
       }
-      rows.push({
-        "Mes": monthName,
-        "Fecha": formatFecha(d),
-        "Día": DATA.days[i] || "",
-        "Asignado(s)": detalle,
-        "Tipo": cell.type === "complete" ? "Encuentro de equipo" : cell.type === "holiday" ? "Feriado" : cell.type === "empty" ? "Sin asignar" : "Presencia en oficina"
-      });
+      rows.push({ Mes: monthName, Fecha: formatFecha(d), Dia: DATA.days[i] || "", Estado: estado, Detalle: detalle });
     });
   });
   return rows;
@@ -2712,40 +2720,104 @@ function getActiveMonthName() {
   return activeBtn ? activeBtn.dataset.month : DATA.months[0];
 }
 
-function downloadWorkbook(sheets, filename) {
-  const wb = XLSX.utils.book_new();
-  sheets.forEach(s => {
-    const ws = XLSX.utils.json_to_sheet(s.rows);
-    XLSX.utils.book_append_sheet(wb, ws, s.name);
+function styleTitleRow(ws, title, span) {
+  ws.mergeCells(1, 1, 1, span);
+  const cell = ws.getCell(1, 1);
+  cell.value = title;
+  cell.font = { name: "Calibri", size: 14, bold: true, color: { argb: "FFFFFFFF" } };
+  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1A1A1A" } };
+  cell.alignment = { vertical: "middle", horizontal: "left" };
+  ws.getRow(1).height = 26;
+}
+
+function styleHeaderRow(row) {
+  row.eachCell(cell => {
+    cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF6C64" } };
+    cell.alignment = { vertical: "middle", horizontal: "left" };
+    cell.border = { bottom: { style: "thin", color: { argb: "FFE8E8E8" } } };
   });
-  XLSX.writeFile(wb, filename);
+}
+
+function buildCalendarSheet(wb, name, title, rows) {
+  const columns = [
+    { header: "Mes", key: "Mes", width: 14 },
+    { header: "Fecha", key: "Fecha", width: 12 },
+    { header: "Día", key: "Dia", width: 12 },
+    { header: "Estado", key: "Estado", width: 20 },
+    { header: "Detalle", key: "Detalle", width: 34 }
+  ];
+  const ws = wb.addWorksheet(name.slice(0, 31));
+  styleTitleRow(ws, title, columns.length);
+  const headerRow = ws.addRow(columns.map(c => c.header));
+  styleHeaderRow(headerRow);
+  columns.forEach((c, i) => ws.getColumn(i + 1).width = c.width);
+  rows.forEach(r => {
+    const row = ws.addRow(columns.map(c => r[c.key]));
+    const fillColor = ESTADO_COLORS[r.Estado] || "FFFFFFFF";
+    row.eachCell(cell => {
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fillColor } };
+      cell.border = { bottom: { style: "thin", color: { argb: "FFEDEDED" } } };
+    });
+  });
+  ws.views = [{ state: "frozen", ySplit: 2 }];
+  return ws;
+}
+
+function buildResumenSheet(wb, title, selected) {
+  const columns = [
+    { header: "Persona", key: "Persona", width: 16 },
+    ...DATA.months.map(m => ({ header: m, key: m, width: 12 })),
+    { header: "Total", key: "Total", width: 12 }
+  ];
+  const ws = wb.addWorksheet("Resumen por persona");
+  styleTitleRow(ws, title, columns.length);
+  const headerRow = ws.addRow(columns.map(c => c.header));
+  styleHeaderRow(headerRow);
+  columns.forEach((c, i) => ws.getColumn(i + 1).width = c.width);
+  Object.keys(DATA.totals)
+    .filter(p => selected === "Todos" || p === selected)
+    .forEach(p => {
+      const row = ws.addRow(columns.map(c => c.key === "Persona" ? p : DATA.breakdown[p][c.key]));
+      row.getCell(columns.length).font = { bold: true };
+      row.eachCell(cell => cell.border = { bottom: { style: "thin", color: { argb: "FFEDEDED" } } });
+    });
+  ws.views = [{ state: "frozen", ySplit: 2 }];
+}
+
+async function downloadWorkbook(buildFn, filename) {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Talent Connect";
+  wb.created = new Date();
+  buildFn(wb);
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function exportExcelMesActual() {
   const selected = $("#personFilter").value;
   const monthName = getActiveMonthName();
-  const rows = buildMonthRows(monthName, selected);
+  const rows = buildMonthCalendar(monthName, selected);
   const who = selected === "Todos" ? "Equipo" : selected;
-  downloadWorkbook([{ name: monthName.slice(0,31), rows }], `TalentConnect_${monthName}_${who}.xlsx`);
+  const title = `Talent Connect — Cronograma de ${who} — ${monthName} 2026`;
+  downloadWorkbook(wb => buildCalendarSheet(wb, monthName, title, rows), `TalentConnect_${monthName}_${who}.xlsx`);
 }
 
 function exportExcelTodo() {
   const selected = $("#personFilter").value;
   const allRows = [];
-  DATA.months.forEach(m => allRows.push(...buildMonthRows(m, selected)));
-
-  const resumenRows = Object.keys(DATA.totals)
-    .filter(p => selected === "Todos" || p === selected)
-    .map(p => ({
-      "Persona": p,
-      ...DATA.breakdown[p]
-    }));
-
+  DATA.months.forEach(m => allRows.push(...buildMonthCalendar(m, selected)));
   const who = selected === "Todos" ? "Equipo" : selected;
-  downloadWorkbook([
-    { name: "Cronograma completo", rows: allRows },
-    { name: "Resumen por persona", rows: resumenRows }
-  ], `TalentConnect_CronogramaCompleto_${who}.xlsx`);
+  const title = `Talent Connect — Cronograma completo de ${who} — Jun-Nov 2026`;
+  downloadWorkbook(wb => {
+    buildCalendarSheet(wb, "Cronograma completo", title, allRows);
+    buildResumenSheet(wb, `Talent Connect — Resumen por persona — ${who}`, selected);
+  }, `TalentConnect_CronogramaCompleto_${who}.xlsx`);
 }
 </script>
 </body>
