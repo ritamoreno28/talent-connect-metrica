@@ -2811,14 +2811,19 @@ function styleHeaderRow(row) {
   });
 }
 
-function buildCalendarSheet(wb, name, title, rows) {
-  const columns = [
-    { header: "Mes", key: "Mes", width: 16 },
-    { header: "Fecha", key: "Fecha", width: 13 },
-    { header: "Día", key: "Dia", width: 12 },
-    { header: "Estado", key: "Estado", width: 20 },
-    { header: "Detalle", key: "Detalle", width: 34 }
-  ];
+function buildCalendarSheet(wb, name, title, rows, opts = {}) {
+  // "Mes" sobra cuando la hoja es de un solo mes (ya sale en el título y en la pestaña);
+  // se deja solo en el cronograma completo, que sí mezcla varios meses.
+  // "Estado" sobra cuando es "Todos" (case casi siempre Presencial, no aporta), pero es
+  // necesario cuando se filtra por una persona (ahí sí varía entre Presencial / Home office).
+  const includeMes = opts.includeMes !== false;
+  const includeEstado = opts.includeEstado !== false;
+  const columns = [];
+  if (includeMes) columns.push({ header: "Mes", key: "Mes", width: 16 });
+  columns.push({ header: "Fecha", key: "Fecha", width: 13 });
+  columns.push({ header: "Día", key: "Dia", width: 12 });
+  if (includeEstado) columns.push({ header: "Estado", key: "Estado", width: 20 });
+  columns.push({ header: "Detalle", key: "Detalle", width: 34 });
   const ws = wb.addWorksheet(name.slice(0, 31));
   const headerRowIdx = addBrandHeader(wb, ws, title, columns.length);
   const headerRow = ws.getRow(headerRowIdx);
@@ -2885,7 +2890,7 @@ function exportExcelMesActual() {
   const rows = buildMonthCalendar(monthName, selected);
   const who = selected === "Todos" ? "Equipo" : selected;
   const title = `Talent Connect — Cronograma de ${who} — ${monthName} 2026`;
-  downloadWorkbook(wb => buildCalendarSheet(wb, monthName, title, rows), `TalentConnect_${monthName}_${who}.xlsx`);
+  downloadWorkbook(wb => buildCalendarSheet(wb, monthName, title, rows, { includeMes: false, includeEstado: selected !== "Todos" }), `TalentConnect_${monthName}_${who}.xlsx`);
 }
 
 function exportExcelTodo() {
@@ -2895,7 +2900,7 @@ function exportExcelTodo() {
   const who = selected === "Todos" ? "Equipo" : selected;
   const title = `Talent Connect — Cronograma completo de ${who} — Jun-Nov 2026`;
   downloadWorkbook(wb => {
-    buildCalendarSheet(wb, "Cronograma completo", title, allRows);
+    buildCalendarSheet(wb, "Cronograma completo", title, allRows, { includeMes: true, includeEstado: selected !== "Todos" });
     buildResumenSheet(wb, `Talent Connect — Resumen por persona — ${who}`, selected);
   }, `TalentConnect_CronogramaCompleto_${who}.xlsx`);
 }
