@@ -2198,6 +2198,7 @@ body{
 }
 
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <div class="app">
@@ -2258,6 +2259,8 @@ body{
       </select>
       <button id="toggleDensity">Vista compacta</button>
       <button onclick="window.print()">Imprimir / PDF</button>
+      <button onclick="exportExcelMesActual()">Excel (mes actual)</button>
+      <button onclick="exportExcelTodo()">Excel (cronograma completo)</button>
     </div>
   </div>
 
@@ -2631,6 +2634,72 @@ $("#toggleDensity").addEventListener("click", () => {
   document.body.classList.toggle("compact");
   $("#toggleDensity").textContent = document.body.classList.contains("compact") ? "Vista amplia" : "Vista compacta";
 });
+
+/* ===== Exportar a Excel ===== */
+function rowIncludesPerson(cell, selected) {
+  if (selected === "Todos") return true;
+  if (cell.type === "complete" || cell.type === "holiday") return true;
+  return (cell.people || []).includes(selected);
+}
+
+function buildMonthRows(monthName, selected) {
+  const weeks = DATA.monthly[monthName] || [];
+  const rows = [];
+  weeks.forEach(w => {
+    w.cells.forEach((cell, i) => {
+      if (!rowIncludesPerson(cell, selected)) return;
+      rows.push({
+        "Mes": monthName,
+        "Semana": w.week,
+        "Día": DATA.days[i] || "",
+        "Asignado(s)": cell.label || "(sin actividad)",
+        "Tipo": cell.type === "complete" ? "Encuentro de equipo" : cell.type === "holiday" ? "Feriado" : cell.type === "empty" ? "Sin asignar" : "Presencia en oficina"
+      });
+    });
+  });
+  return rows;
+}
+
+function getActiveMonthName() {
+  const activeBtn = $(".month-btn.active");
+  return activeBtn ? activeBtn.dataset.month : DATA.months[0];
+}
+
+function downloadWorkbook(sheets, filename) {
+  const wb = XLSX.utils.book_new();
+  sheets.forEach(s => {
+    const ws = XLSX.utils.json_to_sheet(s.rows);
+    XLSX.utils.book_append_sheet(wb, ws, s.name);
+  });
+  XLSX.writeFile(wb, filename);
+}
+
+function exportExcelMesActual() {
+  const selected = $("#personFilter").value;
+  const monthName = getActiveMonthName();
+  const rows = buildMonthRows(monthName, selected);
+  const who = selected === "Todos" ? "Equipo" : selected;
+  downloadWorkbook([{ name: monthName.slice(0,31), rows }], `TalentConnect_${monthName}_${who}.xlsx`);
+}
+
+function exportExcelTodo() {
+  const selected = $("#personFilter").value;
+  const allRows = [];
+  DATA.months.forEach(m => allRows.push(...buildMonthRows(m, selected)));
+
+  const resumenRows = Object.keys(DATA.totals)
+    .filter(p => selected === "Todos" || p === selected)
+    .map(p => ({
+      "Persona": p,
+      ...DATA.breakdown[p]
+    }));
+
+  const who = selected === "Todos" ? "Equipo" : selected;
+  downloadWorkbook([
+    { name: "Cronograma completo", rows: allRows },
+    { name: "Resumen por persona", rows: resumenRows }
+  ], `TalentConnect_CronogramaCompleto_${who}.xlsx`);
+}
 </script>
 </body>
 </html>
