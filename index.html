@@ -2812,14 +2812,22 @@ function addBrandHeader(wb, ws, title, colWidths) {
     }
   } catch (e) { /* el logo es un detalle opcional, nunca debe bloquear la descarga */ }
 
-  ws.mergeCells(2, 1, 2, span);
+  // Igual que el título: la frase de contexto es larga y con pocas columnas de datos (p.ej. al ver
+  // "Todos") la celda fusionada se quedaba corta y el texto se cortaba a la mitad — a diferencia de
+  // una celda normal, una celda fusionada NO se desborda hacia las vecinas vacías, así que si no
+  // entra, Excel/Sheets simplemente la recortan. Se fusiona sobre el mismo ancho extra (fillSpan)
+  // que el título para que siempre quepa completa, y con el mismo fondo/línea para que las dos
+  // filas del encabezado se vean parejas.
+  for (let c = 1; c <= fillSpan; c++) {
+    ws.getCell(2, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF1F0" } };
+    ws.getCell(2, c).border = { bottom: { style: "thin", color: { argb: "FFFFD7D2" } } };
+  }
+  ws.mergeCells(2, 1, 2, fillSpan);
   const subCell = ws.getCell(2, 1);
   subCell.value = BRAND_SUBTITLE;
   subCell.font = { italic: true, size: 10, color: { argb: "FF686868" } };
   subCell.alignment = { vertical: "middle", horizontal: "left" };
-  subCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF1F0" } };
   ws.getRow(2).height = 18;
-  ws.getRow(2).border = { bottom: { style: "thin", color: { argb: "FFFFD7D2" } } };
 
   return 3;
 }
