@@ -381,7 +381,7 @@ button.month-btn.active{background:var(--coral);border-color:var(--coral);color:
 @media(max-width:1200px){.days-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:640px){.days-grid{grid-template-columns:1fr}}
 .day-card{
-  min-height:176px;
+  min-height:132px;
   border:1px solid var(--line);
   border-radius:23px;
   background:white;
@@ -412,7 +412,7 @@ button.month-btn.active{background:var(--coral);border-color:var(--coral);color:
   display:flex;
   align-items:center;
   gap:10px;
-  padding:9px;
+  padding:7px;
   border-radius:18px;
   background:white;
   border:1px solid var(--line);
@@ -422,11 +422,7 @@ button.month-btn.active{background:var(--coral);border-color:var(--coral);color:
 .person-row.stefanny{background:linear-gradient(135deg,white,var(--soft-coral))}
 .person-row .avatar{width:38px;height:38px}
 .person-row b{display:block;font-size:14px}
-.person-row small{display:block;color:var(--muted);font-size:11px;font-weight:800;margin-top:1px}
-.compact .person-row{padding:7px}
-.compact .day-card{min-height:132px}
-.compact .person-row .avatar{width:38px;height:38px}
-.compact .person-row small{display:none}
+.person-row small{display:none;color:var(--muted);font-size:11px;font-weight:800;margin-top:1px}
 .count-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
 @media(max-width:900px){.count-grid{grid-template-columns:1fr}}
 .count-card{
@@ -581,7 +577,7 @@ h1{font-size:clamp(42px,4.8vw,64px);line-height:1;letter-spacing:-.055em;margin:
 .tabs{gap:6px}
 .main-tab{border-radius:11px;padding:10px 14px;font-size:12px;font-weight:800;color:#5B6574}
 .main-tab.active{background:#23272F;color:#fff;box-shadow:none}
-.select,#toggleDensity{border-radius:11px;border-color:#E0E5EB;background:#fff;font-size:12px}
+.select{border-radius:11px;border-color:#E0E5EB;background:#fff;font-size:12px}
 .section-head,.team-intro-head{margin-bottom:14px}
 .section-head h2,.team-intro-head h2{font-size:26px;letter-spacing:-.035em;margin:4px 0 6px}
 .section-head p,.team-intro-head p{font-size:13px;line-height:1.6;color:#687386}
@@ -1304,7 +1300,7 @@ p,.profile-role,.profile-summary,.profile-detail span,.profile-fun span,
 }
 
 /* Filters and buttons */
-.select, #toggleDensity, .filters button {
+.select, .filters button {
   color:#303742 !important;
   background:#FFFFFF !important;
   border-color:#E3E7EC !important;
@@ -2257,7 +2253,6 @@ body{
         <option value="Alonso">Alonso</option>
         <option value="Fiorella">Fiorella</option>
       </select>
-      <button id="toggleDensity" hidden>Vista compacta</button>
       <select id="downloadMenu" class="select">
         <option value="" selected disabled>Descargar Excel ▾</option>
         <option value="excel-mes">Mes actual</option>
@@ -2634,8 +2629,6 @@ function initTabs() {
     btn.classList.add("active");
     $$(".view").forEach(v=>v.classList.remove("active"));
     $(`#view-${btn.dataset.view}`).classList.add("active");
-    // "Vista compacta" solo afecta el diseño de Detalle mensual, así que solo se muestra ahí
-    $("#toggleDensity").hidden = btn.dataset.view !== "months";
     // El filtro de persona y la descarga a Excel solo tienen sentido donde hay cronograma:
     // Vista general y Detalle mensual. En Conócenos, Lineamientos y Distribución no aplican.
     const showSchedule = btn.dataset.view === "general" || btn.dataset.view === "months";
@@ -2655,10 +2648,6 @@ updateDownloadLabels();
 
 
 $("#personFilter").addEventListener("change", applyPersonFilter);
-$("#toggleDensity").addEventListener("click", () => {
-  document.body.classList.toggle("compact");
-  $("#toggleDensity").textContent = document.body.classList.contains("compact") ? "Vista amplia" : "Vista compacta";
-});
 
 $("#downloadMenu").addEventListener("change", (e) => {
   const action = e.target.value;
