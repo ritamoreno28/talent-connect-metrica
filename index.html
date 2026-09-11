@@ -2258,9 +2258,12 @@ body{
         <option value="Fiorella">Fiorella</option>
       </select>
       <button id="toggleDensity">Vista compacta</button>
-      <button onclick="window.print()">Imprimir / PDF</button>
-      <button onclick="exportExcelMesActual()">Excel (mes actual)</button>
-      <button onclick="exportExcelTodo()">Excel (cronograma completo)</button>
+      <select id="downloadMenu" class="select">
+        <option value="" selected disabled>Descargar ▾</option>
+        <option value="print">Imprimir / PDF</option>
+        <option value="excel-mes">Excel · mes actual</option>
+        <option value="excel-todo">Excel · cronograma completo</option>
+      </select>
     </div>
   </div>
 
@@ -2633,6 +2636,14 @@ $("#personFilter").addEventListener("change", applyPersonFilter);
 $("#toggleDensity").addEventListener("click", () => {
   document.body.classList.toggle("compact");
   $("#toggleDensity").textContent = document.body.classList.contains("compact") ? "Vista amplia" : "Vista compacta";
+});
+
+$("#downloadMenu").addEventListener("change", (e) => {
+  const action = e.target.value;
+  if (action === "print") window.print();
+  else if (action === "excel-mes") exportExcelMesActual();
+  else if (action === "excel-todo") exportExcelTodo();
+  e.target.value = "";
 });
 
 /* ===== Exportar a Excel ===== */
