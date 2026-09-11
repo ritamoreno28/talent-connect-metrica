@@ -2774,37 +2774,30 @@ function addBrandHeader(wb, ws, title, colWidths) {
     logoCols++;
   }
   const titleStartCol = logoCols + 1;
-  const titleUnits = totalWidth - logoUnits;
-  const availablePx = titleUnits * PX_PER_UNIT;
 
-  // Encabezado con fondo blanco de punta a punta (igual que la cabecera del propio sitio) en vez
-  // de una franja negra: así el logo —pensado para fondo claro— se ve nítido de forma natural, sin
-  // necesitar un "chip" aparte, y no queda esa costura entre un bloque oscuro y uno claro que se
-  // veía descuadrada. Una línea coral abajo (el color de marca) separa el encabezado del resto.
-  for (let c = 1; c <= span; c++) {
+  // Intentar adivinar cuántas líneas necesita el título (según ancho de columna y tamaño de letra)
+  // resultó poco confiable: Excel/Sheets miden el texto distinto a como se estima acá, así que a
+  // veces se forzaba una fila muy alta "por si acaso" y quedaba con un montón de espacio vacío
+  // cuando el título sí entraba en una sola línea (el caso más común). Dejarlo "desbordar" hacia
+  // celdas vacías tampoco sirve: eso es solo un truco visual en pantalla que NO se respeta al
+  // imprimir o exportar a PDF (cada celda se recorta a su propio ancho), y volvería a cortar el
+  // título justo ahí. La solución robusta en cualquier contexto: fusionar el título sobre varias
+  // columnas EXTRA más allá de la tabla real (espacio real, no truco de pantalla), de sobra para
+  // que el texto entre en una sola línea siempre; el salto de línea queda solo como resguardo.
+  const OVERFLOW_COLS = 6;
+  const fillSpan = span + OVERFLOW_COLS;
+  const rowHeightPt = 26;
+
+  for (let c = 1; c <= fillSpan; c++) {
     ws.getCell(1, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFFFF" } };
-  }
-  ws.mergeCells(1, titleStartCol, 1, span);
-  const titleCell = ws.getCell(1, titleStartCol);
-  titleCell.value = title;
-
-  // El título cambia de largo según la persona y el rango de meses filtrados. Con pocas columnas
-  // (p.ej. al quitar Mes/Estado) el espacio real puede no alcanzar para una sola línea — en vez de
-  // dejar que se vea cortado a la mitad, se agranda o achica la letra según el espacio y, si aun así
-  // no entra en una línea, se parte en 2 (con más alto de fila) para que siempre se lea completo.
-  const fitsOneLine = size => title.length * (size * 0.62) <= availablePx;
-  let fontSize = fitsOneLine(14) ? 14 : (fitsOneLine(13) ? 13 : 12);
-  const oneLine = fitsOneLine(fontSize);
-  const charsPerLine = Math.max(10, Math.floor(availablePx / (fontSize * 0.62)));
-  const lines = oneLine ? 1 : Math.min(3, Math.ceil(title.length / charsPerLine));
-  const rowHeightPt = oneLine ? 30 : (17 * lines + 14);
-
-  titleCell.font = { name: "Calibri", size: fontSize, bold: true, color: { argb: "FF1A1A1A" } };
-  titleCell.alignment = { vertical: "middle", horizontal: "left", wrapText: !oneLine };
-  ws.getRow(1).height = rowHeightPt;
-  for (let c = 1; c <= span; c++) {
     ws.getCell(1, c).border = { bottom: { style: "medium", color: { argb: "FFFF6C64" } } };
   }
+  ws.mergeCells(1, titleStartCol, 1, fillSpan);
+  const titleCell = ws.getCell(1, titleStartCol);
+  titleCell.value = title;
+  titleCell.font = { name: "Calibri", size: 13, bold: true, color: { argb: "FF1A1A1A" } };
+  titleCell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
+  ws.getRow(1).height = rowHeightPt;
 
   try {
     const logoImg = document.querySelector(".metrica-logo-official");
