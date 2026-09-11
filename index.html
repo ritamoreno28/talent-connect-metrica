@@ -2732,7 +2732,7 @@ function buildMonthCalendar(monthName, selected) {
         } else if (incluye) {
           estado = "Presencial"; detalle = selected;
         } else {
-          estado = "Remoto"; detalle = "—";
+          estado = "Remoto"; detalle = "Home office";
         }
       }
       rows.push({ Mes: monthName, Fecha: formatFecha(d), Dia: DATA.days[i] || "", Estado: estado, Detalle: detalle, _reunion: reunion });
