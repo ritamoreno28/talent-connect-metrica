@@ -2757,13 +2757,25 @@ const BRAND_SUBTITLE = "Cobertura: Lunes a viernes   ·   Encuentro de TH: Jueve
 
 // Encabezado de marca: logo de Métrica (tomado de la propia página) + título + frase de contexto.
 // Devuelve la fila en la que debe ir el encabezado de columnas.
-function addBrandHeader(wb, ws, title, span) {
-  const titleRow = ws.getRow(1);
-  titleRow.height = 40;
-  // Se reservan las 2 primeras columnas para el logo (así tiene espacio real y no queda aplastado
-  // contra el título); si la hoja es muy angosta se reserva solo 1.
-  const logoCols = span >= 3 ? 2 : 1;
+// `colWidths`: ancho (en unidades de Excel) de cada columna de la hoja, en orden — con esto el
+// logo reserva solo el espacio mínimo que necesita para verse bien y el título se queda con el
+// resto real disponible, en vez de perder espacio fijo sin importar cuántas columnas haya.
+function addBrandHeader(wb, ws, title, colWidths) {
+  const span = colWidths.length;
+  const totalWidth = colWidths.reduce((a, b) => a + b, 0);
+  const PX_PER_UNIT = 7;
+
+  // Se reservan las columnas mínimas necesarias para que el logo tenga un chip decente
+  // (no más, así el título se queda con todo el espacio posible y no se corta).
+  const targetLogoUnits = totalWidth <= 40 ? 11 : 15;
+  let logoCols = 0, logoUnits = 0;
+  while (logoCols < span - 1 && logoUnits < targetLogoUnits) {
+    logoUnits += colWidths[logoCols];
+    logoCols++;
+  }
   const titleStartCol = logoCols + 1;
+  const titleUnits = totalWidth - logoUnits;
+  const availablePx = titleUnits * PX_PER_UNIT;
 
   // El logo de Métrica está pensado para fondo claro (igual que en la web); puesto directo sobre
   // la barra oscura casi no se distingue. Se le da su propio "chip" blanco detrás para que resalte.
@@ -2776,17 +2788,32 @@ function addBrandHeader(wb, ws, title, span) {
   ws.mergeCells(1, titleStartCol, 1, span);
   const titleCell = ws.getCell(1, titleStartCol);
   titleCell.value = title;
-  titleCell.font = { name: "Calibri", size: 13, bold: true, color: { argb: "FFFFFFFF" } };
-  titleCell.alignment = { vertical: "middle", horizontal: "left" };
+
+  // El título cambia de largo según la persona y el rango de meses filtrados. Con pocas columnas
+  // (p.ej. al quitar Mes/Estado) el espacio real puede no alcanzar para una sola línea — en vez de
+  // dejar que se vea cortado a la mitad, se reduce un punto la letra y, si aun así no entra, se
+  // parte en 2 líneas (con más alto de fila) para que siempre se lea completo.
+  const fitsOneLine = size => title.length * (size * 0.62) <= availablePx;
+  let fontSize = fitsOneLine(13) ? 13 : 12;
+  const oneLine = fitsOneLine(fontSize);
+  const charsPerLine = Math.max(10, Math.floor(availablePx / (fontSize * 0.62)));
+  const lines = oneLine ? 1 : Math.min(3, Math.ceil(title.length / charsPerLine));
+  const rowHeightPt = oneLine ? 34 : (18 * lines + 14);
+
+  titleCell.font = { name: "Calibri", size: fontSize, bold: true, color: { argb: "FFFFFFFF" } };
+  titleCell.alignment = { vertical: "middle", horizontal: "left", wrapText: !oneLine };
+  ws.getRow(1).height = rowHeightPt;
 
   try {
     const logoImg = document.querySelector(".metrica-logo-official");
     if (logoImg && logoImg.src.indexOf("data:image/png") === 0) {
       const base64 = logoImg.src.split(",")[1];
       const imageId = wb.addImage({ base64, extension: "png" });
-      const logoWidth = logoCols === 2 ? 175 : 95;
+      const logoWidth = Math.min(140, Math.max(50, logoUnits * PX_PER_UNIT - 16));
       const logoHeight = logoWidth / 6.8836; // relación de aspecto real del logo (12949x1881px)
-      ws.addImage(imageId, { tl: { col: 0.15, row: 0.22 }, ext: { width: logoWidth, height: logoHeight } });
+      const rowHeightPx = rowHeightPt * (4 / 3);
+      const offsetRowUnits = Math.max(0.05, ((rowHeightPx - logoHeight) / 2) / rowHeightPx);
+      ws.addImage(imageId, { tl: { col: 0.15, row: offsetRowUnits }, ext: { width: logoWidth, height: logoHeight } });
     }
   } catch (e) { /* el logo es un detalle opcional, nunca debe bloquear la descarga */ }
 
@@ -2825,7 +2852,7 @@ function buildCalendarSheet(wb, name, title, rows, opts = {}) {
   if (includeEstado) columns.push({ header: "Estado", key: "Estado", width: 20 });
   columns.push({ header: "Detalle", key: "Detalle", width: 34 });
   const ws = wb.addWorksheet(name.slice(0, 31));
-  const headerRowIdx = addBrandHeader(wb, ws, title, columns.length);
+  const headerRowIdx = addBrandHeader(wb, ws, title, columns.map(c => c.width));
   const headerRow = ws.getRow(headerRowIdx);
   columns.forEach((c, i) => headerRow.getCell(i + 1).value = c.header);
   headerRow.commit();
@@ -2852,7 +2879,7 @@ function buildResumenSheet(wb, title, selected) {
     { header: "Total", key: "Total", width: 12 }
   ];
   const ws = wb.addWorksheet("Resumen por persona");
-  const headerRowIdx = addBrandHeader(wb, ws, title, columns.length);
+  const headerRowIdx = addBrandHeader(wb, ws, title, columns.map(c => c.width));
   const headerRow = ws.getRow(headerRowIdx);
   columns.forEach((c, i) => headerRow.getCell(i + 1).value = c.header);
   headerRow.commit();
