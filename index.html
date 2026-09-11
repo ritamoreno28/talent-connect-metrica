@@ -2669,6 +2669,8 @@ $("#downloadMenu").addEventListener("change", (e) => {
 
 /* ===== Exportar a Excel ===== */
 const MONTHS_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+// Orden fijo del equipo, para que "Fiorella + Gonzalo" no aparezca a veces así y otras "Gonzalo + Fiorella".
+const PERSON_ORDER = Object.keys(DATA.totals);
 
 // "Estado" es el modo de trabajo real (Presencial / Home office). "Encuentro de Talento Humano"
 // ya no es un estado aparte —ese día también es Presencial—, así que solo se usa como color
@@ -2728,9 +2730,14 @@ function buildMonthCalendar(monthName, selected) {
       } else { // "people"
         const incluye = (cell.people || []).includes(selected);
         if (selected === "Todos") {
-          estado = "Presencial"; detalle = cell.label || "";
+          // cell.label trae el orden tal cual quedó cargado en los datos, que no es consistente
+          // (a veces "Alonso + Fiorella", otro día "Fiorella + Alonso" para el mismo par).
+          // Se reconstruye siempre en el mismo orden del equipo para que se vea prolijo.
+          estado = "Presencial";
+          const ordenado = PERSON_ORDER.filter(p => (cell.people || []).includes(p));
+          detalle = ordenado.length ? ordenado.join(" + ") : (cell.label || "");
         } else if (incluye) {
-          estado = "Presencial"; detalle = selected;
+          estado = "Presencial"; detalle = "Le toca ir a la oficina";
         } else {
           estado = "Home office"; detalle = "En cualquier lugar, menos en la ofi";
         }
