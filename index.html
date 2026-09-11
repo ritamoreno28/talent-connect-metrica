@@ -2621,6 +2621,11 @@ function initTabs() {
     $(`#view-${btn.dataset.view}`).classList.add("active");
     // "Vista compacta" solo afecta el diseño de Detalle mensual, así que solo se muestra ahí
     $("#toggleDensity").hidden = btn.dataset.view !== "months";
+    // El filtro de persona y la descarga a Excel solo tienen sentido donde hay cronograma:
+    // Vista general y Detalle mensual. En Conócenos, Lineamientos y Distribución no aplican.
+    const showSchedule = btn.dataset.view === "general" || btn.dataset.view === "months";
+    $("#personFilter").hidden = !showSchedule;
+    $("#downloadMenu").hidden = !showSchedule;
   }));
 }
 
@@ -2720,14 +2725,41 @@ function getActiveMonthName() {
   return activeBtn ? activeBtn.dataset.month : DATA.months[0];
 }
 
-function styleTitleRow(ws, title, span) {
-  ws.mergeCells(1, 1, 1, span);
-  const cell = ws.getCell(1, 1);
-  cell.value = title;
-  cell.font = { name: "Calibri", size: 14, bold: true, color: { argb: "FFFFFFFF" } };
-  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1A1A1A" } };
-  cell.alignment = { vertical: "middle", horizontal: "left" };
-  ws.getRow(1).height = 26;
+const BRAND_SUBTITLE = "Cobertura: Lunes a viernes   ·   Encuentro de TH: Jueves   ·   Referencia semanal: ≥ 3 días";
+
+// Encabezado de marca: logo de Métrica (tomado de la propia página) + título + frase de contexto.
+// Devuelve la fila en la que debe ir el encabezado de columnas.
+function addBrandHeader(wb, ws, title, span) {
+  const titleRow = ws.getRow(1);
+  titleRow.height = 34;
+  for (let c = 1; c <= span; c++) {
+    ws.getCell(1, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1A1A1A" } };
+  }
+  ws.mergeCells(1, 2, 1, span);
+  const titleCell = ws.getCell(1, 2);
+  titleCell.value = title;
+  titleCell.font = { name: "Calibri", size: 13, bold: true, color: { argb: "FFFFFFFF" } };
+  titleCell.alignment = { vertical: "middle", horizontal: "left" };
+
+  try {
+    const logoImg = document.querySelector(".metrica-logo-official");
+    if (logoImg && logoImg.src.indexOf("data:image/png") === 0) {
+      const base64 = logoImg.src.split(",")[1];
+      const imageId = wb.addImage({ base64, extension: "png" });
+      ws.addImage(imageId, { tl: { col: 0.15, row: 0.15 }, ext: { width: 100, height: 14.5 } });
+    }
+  } catch (e) { /* el logo es un detalle opcional, nunca debe bloquear la descarga */ }
+
+  ws.mergeCells(2, 1, 2, span);
+  const subCell = ws.getCell(2, 1);
+  subCell.value = BRAND_SUBTITLE;
+  subCell.font = { italic: true, size: 10, color: { argb: "FF686868" } };
+  subCell.alignment = { vertical: "middle", horizontal: "left" };
+  subCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF1F0" } };
+  ws.getRow(2).height = 18;
+  ws.getRow(2).border = { bottom: { style: "thin", color: { argb: "FFFFD7D2" } } };
+
+  return 3;
 }
 
 function styleHeaderRow(row) {
@@ -2748,19 +2780,23 @@ function buildCalendarSheet(wb, name, title, rows) {
     { header: "Detalle", key: "Detalle", width: 34 }
   ];
   const ws = wb.addWorksheet(name.slice(0, 31));
-  styleTitleRow(ws, title, columns.length);
-  const headerRow = ws.addRow(columns.map(c => c.header));
+  const headerRowIdx = addBrandHeader(wb, ws, title, columns.length);
+  const headerRow = ws.getRow(headerRowIdx);
+  columns.forEach((c, i) => headerRow.getCell(i + 1).value = c.header);
+  headerRow.commit();
   styleHeaderRow(headerRow);
   columns.forEach((c, i) => ws.getColumn(i + 1).width = c.width);
   rows.forEach(r => {
-    const row = ws.addRow(columns.map(c => r[c.key]));
+    const row = ws.getRow(ws.lastRow.number + 1);
+    columns.forEach((c, i) => row.getCell(i + 1).value = r[c.key]);
     const fillColor = ESTADO_COLORS[r.Estado] || "FFFFFFFF";
-    row.eachCell(cell => {
+    row.eachCell({ includeEmpty: true }, cell => {
       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fillColor } };
       cell.border = { bottom: { style: "thin", color: { argb: "FFEDEDED" } } };
     });
+    row.commit();
   });
-  ws.views = [{ state: "frozen", ySplit: 2 }];
+  ws.views = [{ state: "frozen", ySplit: headerRowIdx }];
   return ws;
 }
 
@@ -2771,18 +2807,22 @@ function buildResumenSheet(wb, title, selected) {
     { header: "Total", key: "Total", width: 12 }
   ];
   const ws = wb.addWorksheet("Resumen por persona");
-  styleTitleRow(ws, title, columns.length);
-  const headerRow = ws.addRow(columns.map(c => c.header));
+  const headerRowIdx = addBrandHeader(wb, ws, title, columns.length);
+  const headerRow = ws.getRow(headerRowIdx);
+  columns.forEach((c, i) => headerRow.getCell(i + 1).value = c.header);
+  headerRow.commit();
   styleHeaderRow(headerRow);
   columns.forEach((c, i) => ws.getColumn(i + 1).width = c.width);
   Object.keys(DATA.totals)
     .filter(p => selected === "Todos" || p === selected)
     .forEach(p => {
-      const row = ws.addRow(columns.map(c => c.key === "Persona" ? p : DATA.breakdown[p][c.key]));
-      row.getCell(columns.length).font = { bold: true };
-      row.eachCell(cell => cell.border = { bottom: { style: "thin", color: { argb: "FFEDEDED" } } });
+      const row = ws.getRow(ws.lastRow.number + 1);
+      columns.forEach((c, i) => row.getCell(i + 1).value = c.key === "Persona" ? p : DATA.breakdown[p][c.key]);
+      row.getCell(columns.length).font = { bold: true, color: { argb: "FFFF6C64" } };
+      row.eachCell({ includeEmpty: true }, cell => cell.border = { bottom: { style: "thin", color: { argb: "FFEDEDED" } } });
+      row.commit();
     });
-  ws.views = [{ state: "frozen", ySplit: 2 }];
+  ws.views = [{ state: "frozen", ySplit: headerRowIdx }];
 }
 
 async function downloadWorkbook(buildFn, filename) {
