@@ -2765,7 +2765,7 @@ function addBrandHeader(wb, ws, title, colWidths) {
   const totalWidth = colWidths.reduce((a, b) => a + b, 0);
   const PX_PER_UNIT = 7;
 
-  // Se reservan las columnas mínimas necesarias para que el logo tenga un chip decente
+  // Se reservan las columnas mínimas necesarias para que el logo tenga espacio decente
   // (no más, así el título se queda con todo el espacio posible y no se corta).
   const targetLogoUnits = totalWidth <= 40 ? 11 : 15;
   let logoCols = 0, logoUnits = 0;
@@ -2777,13 +2777,12 @@ function addBrandHeader(wb, ws, title, colWidths) {
   const titleUnits = totalWidth - logoUnits;
   const availablePx = titleUnits * PX_PER_UNIT;
 
-  // El logo de Métrica está pensado para fondo claro (igual que en la web); puesto directo sobre
-  // la barra oscura casi no se distingue. Se le da su propio "chip" blanco detrás para que resalte.
-  for (let c = 1; c <= logoCols; c++) {
+  // Encabezado con fondo blanco de punta a punta (igual que la cabecera del propio sitio) en vez
+  // de una franja negra: así el logo —pensado para fondo claro— se ve nítido de forma natural, sin
+  // necesitar un "chip" aparte, y no queda esa costura entre un bloque oscuro y uno claro que se
+  // veía descuadrada. Una línea coral abajo (el color de marca) separa el encabezado del resto.
+  for (let c = 1; c <= span; c++) {
     ws.getCell(1, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFFFF" } };
-  }
-  for (let c = titleStartCol; c <= span; c++) {
-    ws.getCell(1, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1A1A1A" } };
   }
   ws.mergeCells(1, titleStartCol, 1, span);
   const titleCell = ws.getCell(1, titleStartCol);
@@ -2791,18 +2790,21 @@ function addBrandHeader(wb, ws, title, colWidths) {
 
   // El título cambia de largo según la persona y el rango de meses filtrados. Con pocas columnas
   // (p.ej. al quitar Mes/Estado) el espacio real puede no alcanzar para una sola línea — en vez de
-  // dejar que se vea cortado a la mitad, se reduce un punto la letra y, si aun así no entra, se
-  // parte en 2 líneas (con más alto de fila) para que siempre se lea completo.
+  // dejar que se vea cortado a la mitad, se agranda o achica la letra según el espacio y, si aun así
+  // no entra en una línea, se parte en 2 (con más alto de fila) para que siempre se lea completo.
   const fitsOneLine = size => title.length * (size * 0.62) <= availablePx;
-  let fontSize = fitsOneLine(13) ? 13 : 12;
+  let fontSize = fitsOneLine(14) ? 14 : (fitsOneLine(13) ? 13 : 12);
   const oneLine = fitsOneLine(fontSize);
   const charsPerLine = Math.max(10, Math.floor(availablePx / (fontSize * 0.62)));
   const lines = oneLine ? 1 : Math.min(3, Math.ceil(title.length / charsPerLine));
-  const rowHeightPt = oneLine ? 34 : (18 * lines + 14);
+  const rowHeightPt = oneLine ? 30 : (17 * lines + 14);
 
-  titleCell.font = { name: "Calibri", size: fontSize, bold: true, color: { argb: "FFFFFFFF" } };
+  titleCell.font = { name: "Calibri", size: fontSize, bold: true, color: { argb: "FF1A1A1A" } };
   titleCell.alignment = { vertical: "middle", horizontal: "left", wrapText: !oneLine };
   ws.getRow(1).height = rowHeightPt;
+  for (let c = 1; c <= span; c++) {
+    ws.getCell(1, c).border = { bottom: { style: "medium", color: { argb: "FFFF6C64" } } };
+  }
 
   try {
     const logoImg = document.querySelector(".metrica-logo-official");
