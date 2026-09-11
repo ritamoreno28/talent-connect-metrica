@@ -2737,7 +2737,7 @@ function buildMonthCalendar(monthName, selected) {
           const ordenado = PERSON_ORDER.filter(p => (cell.people || []).includes(p));
           detalle = ordenado.length ? ordenado.join(" + ") : (cell.label || "");
         } else if (incluye) {
-          estado = "Presencial"; detalle = "Le toca ir a la oficina";
+          estado = "Presencial"; detalle = "En la oficina con la familia Métrica";
         } else {
           estado = "Home office"; detalle = "En cualquier lugar, menos en la ofi";
         }
