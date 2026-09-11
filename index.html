@@ -2670,12 +2670,12 @@ $("#downloadMenu").addEventListener("change", (e) => {
 /* ===== Exportar a Excel ===== */
 const MONTHS_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
-// "Estado" es el modo de trabajo real (Presencial / Remoto). "Encuentro de Talento Humano"
+// "Estado" es el modo de trabajo real (Presencial / Home office). "Encuentro de Talento Humano"
 // ya no es un estado aparte —ese día también es Presencial—, así que solo se usa como color
 // especial de fila (ver _reunion en buildCalendarSheet) y el texto va en "Detalle".
 const ESTADO_COLORS = {
   "Presencial":                    "FFEAF9F7",
-  "Remoto":                        "FFF7F7F7",
+  "Home office":                   "FFF7F7F7",
   "Encuentro de Talento Humano":   "FFFFF1F0",
   "Feriado":                       "FFFFF9E6",
   "Sin asignar":                   "FFF0F0F0"
@@ -2732,7 +2732,7 @@ function buildMonthCalendar(monthName, selected) {
         } else if (incluye) {
           estado = "Presencial"; detalle = selected;
         } else {
-          estado = "Remoto"; detalle = "Home office";
+          estado = "Home office"; detalle = "En cualquier lugar, menos en la ofi";
         }
       }
       rows.push({ Mes: monthName, Fecha: formatFecha(d), Dia: DATA.days[i] || "", Estado: estado, Detalle: detalle, _reunion: reunion });
